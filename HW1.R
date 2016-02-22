@@ -73,7 +73,7 @@ cl_data$trend <- decompose(ts)$trend
 plot2 = ggplot(cl_data, aes( x=time , y=trend ))+
   geom_line() +
   labs(y="Temperature, MA",
-       title="Temperature measured at Bear Island, 12 Month Moving Average")
+       title="Temperature measured at Bear Island, 12 Month Moving Average") 
 
 pdf(file = "zsuzsa1_temperature.pdf")
 #Set layout
