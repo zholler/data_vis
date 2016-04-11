@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<meta charset="utf-8">
+
+<style>
+
+html, body, #map {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.stations, .stations svg {
+  position: absolute;
+}
+
+.stations svg {
+  font: 10px sans-serif;
+}
+
+</style>
+
+<div id="map"></div>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB3eWAG9PGk8hsxY6mNrOrWdE-r8pJU9jc"></script>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+
+//Create the Google Map
+var map = new google.maps.Map(d3.select("#map").node(), {
+  zoom: 14,
+  center: new google.maps.LatLng(47.4979, 19.0502),
+  mapTypeId: google.maps.MapTypeId.TERRAIN
+});
+
+ 
+//Load the data and create overlay on data load
+d3.json("traffic.json", function(error, data) {
+  if (error) throw error;
+
+  //Text list with time values to be displayed(instead of id of half-hour)
+  var hours = ["00:30 AM","01:00 AM","01:30 AM","02:00 AM","02:30 AM","03:00 AM","03:30 AM","04:00 AM","04:30 AM","05:00 AM","05:30 AM","06:00 AM","06:30 AM","07:00 AM","07:30 AM","08:00 AM","08:30 AM","09:00 AM","09:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM","12:00 AM","12:30 PM","13:00 PM","13:30 PM","14:00 PM","14:30 PM","15:00 PM","15:30 PM","16:00 PM","16:30 PM","17:00 PM","17:30 PM","18:00 PM","18:30 PM","19:00 PM","19:30 PM","20:00 PM","20:30 PM","21:00 PM","21:30 PM","22:00 PM","22:30 PM","23:00 PM","23:30 PM","24:00 PM"];
+
+  //Add new map layer
+  var overlay = new google.maps.OverlayView();
+
+  //Perform actions when the overlay is added to the map.
+  overlay.onAdd = function() {
+  
+    //define layer div
+    var layer = d3.select(this.getPanes().overlayLayer).append("div")
+        .attr("class", "stations");
+
+
+    // Draw elements to the new map layer and define transition
+    overlay.draw = function() {
+
+      //Define projection needed to place svg elements on this layer
+      var projection = this.getProjection();   
+
+      //Add svg containers for station markers (initially for the first time period)
+      var marker = layer.selectAll("svg")
+          .data(selectData(1))
+        .enter().append("svg")
+          .each(transform)
+          .attr("class", "marker");
+
+      // Add a circle with size and color based on demand data (initially for the first time period)
+      marker.append("circle")
+          .attr("r", function(d) { return 4.5 * d.demandvalue; } )
+          .attr("cx", function(d) { return 4.5* d.demandvalue; })
+          .attr("cy", function(d) { return 4.5* d.demandvalue; })
+	  .style("fill", function(d) { if (d.sign == 1) {var col = "green";} else {var col="red";} return col; });
+      
+      //Append button that starts transition
+      d3.select("body").append("img")
+          .attr("src","button.svg")
+          .attr("width", 50)
+          .attr("height", 50)
+          .style("position","absolute")
+          .style("left",20+ "px")
+          .style("bottom",100+ "px")
+          .on("click",startTransition);
+
+      //Append text showing time period currectly showed 
+      var hourtext = d3.select("body").append("text")
+          .text("00:30 AM")
+          .style("text-anchor", "middle")
+          .style("font-family", "sans-serif")
+          .style("font-size", "20px")
+          .style("position","absolute")
+          .style("left",20+ "px")
+          .style("bottom",50+ "px");
+
+     //Append slider to choose time period by hand
+      d3.select("body").append("text")
+          .text("Select time:")
+          .style("text-anchor", "middle")
+          .style("font-family", "sans-serif")
+          .style("font-size", "12px")
+          .style("position","absolute")
+          .style("left",20+ "px")
+          .style("bottom",26+ "px");
+
+     d3.select("body").append("input")
+   	 .attr("type","range")
+         .attr( "min","1")
+         .attr( "max","48") 
+         .attr( "value","1") 
+         .attr("id","timebyhand")
+         .style("position","absolute")
+          .style("left",10+ "px")
+          .style("bottom",10+ "px")
+          .on("input",stopInteraction );
+
+        //Function to execute when slider is changed
+        function stopInteraction() {
+   
+          // Cancel the current transition, if any.
+          marker.transition().duration(0);
+          //Change circle features and text according to the selected value
+          changeCircle(document.getElementById("timebyhand").value)
+  
+        }
+
+       //Function executed in linear transition
+       function tweenTime() {
+           var time = d3.interpolateNumber(1, 48);
+           return function(t) { changeCircle(time(t));};
+       }
+
+       // Updates circle features and text according to the selected value to show the specified time period
+       function changeCircle(time) {
+           marker.data(selectData(time));
+           marker.each(transform)
+	   marker.select("circle")
+          .attr("r", function(d) { return 4.5 * d.demandvalue; } )
+          .attr("cx", function(d) { return 4.5* d.demandvalue; })
+          .attr("cy", function(d) { return 4.5* d.demandvalue; })
+	  .style("fill", function(d) { if (d.sign == 1) {var col = "green";} else {var col="red";} return col; });
+          hourtext.data(selectData(time));
+          hourtext.text( function(d) {return d.hour;});
+       }
+
+      //Function that defines the location of stations on the map
+      function transform(d) {
+        d2 = new google.maps.LatLng(d.lat, d.lng);
+        d2 = projection.fromLatLngToDivPixel(d2);
+        return d3.select(this)
+            .style("left", (d2.x - 4.5 * d.demandvalue) + "px")
+            .style("top", (d2.y - 4.5 * d.demandvalue) + "px");
+      }
+
+      //Extracts the data from the json file for the given time period
+      function selectData(time) {
+		return data.map(function(d) {
+			return {
+				namestation: d.namestation,
+				lat: d.lat,
+				lng: d.lng,
+                                hour: hours[Math.round(time)-1],
+				demandvalue: Math.abs(selectValues(d.demand, time)),
+				sign: Math.sign(selectValues(d.demand, time))
+			};
+		});
+       }
+
+	
+       // Finds the demand value for the specified time period 
+       function selectValues(values, time) {
+		var i = Math.round(time);
+		var a = values[i-1];
+		return a[1];
+       }
+
+        //Starts transition
+	function startTransition() {
+      	  marker.transition()
+             .duration(48000)
+             .ease("linear")
+             .tween("time", tweenTime);
+        }
+
+    };
+  };
+
+  // Bind the overlay to the map
+  overlay.setMap(map);
+});
+
+</script>
